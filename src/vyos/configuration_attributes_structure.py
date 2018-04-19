@@ -28,6 +28,14 @@ class VyOSResource(object):
             self.shell_type = ""
 
     @property
+    def config_file(self):
+        """
+
+        :rtype: str
+        """
+        return self.attributes.get("{}Configuration File".format(self.namespace_prefix), None)
+
+    @property
     def backup_user(self):
         """
 

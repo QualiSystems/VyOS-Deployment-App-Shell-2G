@@ -60,6 +60,21 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                                         shell_type=SHELL_TYPE,
                                                         shell_name=SHELL_NAME)
 
+            if resource_config.config_file:
+                api = get_api(context)
+                cli_handler = VyOSCliHandler(cli=self._cli,
+                                             resource_config=resource_config,
+                                             api=api,
+                                             logger=logger)
+
+                configuration_operations = VyOSConfigurationRunner(cli_handler=cli_handler,
+                                                                   logger=logger,
+                                                                   resource_config=resource_config,
+                                                                   api=api)
+                logger.info('Load configuration started')
+                configuration_operations.restore(path=path)
+                logger.info('Load configuration completed')
+
             root_resource = models.GenericDeployedApp(shell_name=resource_config.shell_name,
                                                       name="VyOS Deployed App",
                                                       unique_id=100500)
@@ -74,13 +89,11 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
             return AutoloadDetailsBuilder(root_resource).autoload_details()
 
-    def save(self, context, folder_path, configuration_type, vrf_management_name):
+    def save(self, context, folder_path):
         """Save selected file to the provided destination
 
         :param ResourceCommandContext context: ResourceCommandContext object with all Resource Attributes inside
-        :param configuration_type: source file, which will be saved
         :param folder_path: destination path where file will be saved
-        :param vrf_management_name: VRF management Name
         :return str saved configuration file name:
         """
 
@@ -93,12 +106,6 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                                         shell_type=SHELL_TYPE,
                                                         shell_name=SHELL_NAME)
 
-            if not configuration_type:
-                configuration_type = "running"
-
-            if not vrf_management_name:
-                vrf_management_name = resource_config.vrf_management_name
-
             api = get_api(context)
             cli_handler = VyOSCliHandler(cli=self._cli,
                                          resource_config=resource_config,
@@ -110,21 +117,16 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                                                resource_config=resource_config,
                                                                api=api)
             logger.info("Save started")
-            response = configuration_operations.save(folder_path=folder_path,
-                                                     configuration_type=configuration_type,
-                                                     vrf_management_name=vrf_management_name)
+            response = configuration_operations.save(folder_path=folder_path)
             logger.info("Save completed")
             return response
 
     @GlobalLock.lock
-    def restore(self, context, path, configuration_type, restore_method, vrf_management_name):
+    def restore(self, context, path):
         """Restore selected file to the provided destination
 
         :param ResourceCommandContext context: ResourceCommandContext object with all Resource Attributes inside
         :param path: source config file
-        :param configuration_type: running or startup configs
-        :param restore_method: append or override methods
-        :param vrf_management_name: VRF management Name
         """
 
         logger = get_logger_with_thread_id(context)
@@ -135,15 +137,6 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
             resource_config = VyOSResource.from_context(context=context,
                                                         shell_type=SHELL_TYPE,
                                                         shell_name=SHELL_NAME)
-
-            if not configuration_type:
-                configuration_type = 'running'
-
-            if not restore_method:
-                restore_method = 'override'
-
-            if not vrf_management_name:
-                vrf_management_name = resource_config.vrf_management_name
 
             api = get_api(context)
             cli_handler = VyOSCliHandler(cli=self._cli,
@@ -156,10 +149,7 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                                                resource_config=resource_config,
                                                                api=api)
             logger.info('Restore started')
-            configuration_operations.restore(path=path,
-                                             restore_method=restore_method,
-                                             configuration_type=configuration_type,
-                                             vrf_management_name=vrf_management_name)
+            configuration_operations.restore(path=path)
             logger.info('Restore completed')
 
 
@@ -186,7 +176,7 @@ if __name__ == "__main__":
     context.resource.attributes = {}
     context.resource.attributes['{}.User'.format(SHELL_NAME)] = user
     context.resource.attributes['{}.Password'.format(SHELL_NAME)] = password
-    context.resource.attributes['{}.License Server'.format(SHELL_TYPE)] = "192.168.42.61"
+    context.resource.attributes['{}.Configuration File'.format(SHELL_NAME)] = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"
     context.resource.address = address
     context.resource.app_context = mock.MagicMock(app_request_json=json.dumps(
         {
