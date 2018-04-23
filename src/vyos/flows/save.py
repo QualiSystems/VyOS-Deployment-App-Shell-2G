@@ -8,8 +8,6 @@ class VyOSSaveFlow(SaveConfigurationFlow):
         """Execute flow which save selected file to the provided destination
 
         :param folder_path: destination path where file will be saved
-        :param configuration_type: source file, which will be saved
-        :param vrf_management_name: Virtual Routing and Forwarding Name
         :return: saved configuration file name
         """
 

@@ -24,3 +24,5 @@ SAVE_CONFIGURATION = CommandTemplate("save {destination_file_path}", error_map=p
 LOAD_CONFIGURATION = CommandTemplate("load {source_file_path}", error_map=prepare_error_map())
 
 COMMIT = CommandTemplate("commit", error_map=prepare_error_map())
+
+SHOW_INTERFACES = CommandTemplate("show interfaces", error_map=prepare_error_map())

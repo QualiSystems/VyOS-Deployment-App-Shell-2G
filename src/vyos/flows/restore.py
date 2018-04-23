@@ -4,8 +4,6 @@ from vyos.command_actions.system_actions import SystemActions
 
 
 class VyOSRestoreFlow(RestoreConfigurationFlow):
-    STARTUP_LOCATION = "nvram:startup_config"
-
     def __init__(self, cli_handler, logger):
         super(VyOSRestoreFlow, self).__init__(cli_handler, logger)
 
@@ -24,6 +22,3 @@ class VyOSRestoreFlow(RestoreConfigurationFlow):
             sys_actions.load(path=path,
                              action_map=load_action_map)
             sys_actions.commit()
-
-
-

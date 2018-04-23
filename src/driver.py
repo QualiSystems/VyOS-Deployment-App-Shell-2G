@@ -1,17 +1,16 @@
 from cloudshell.core.context.error_handling_context import ErrorHandlingContext
-from cloudshell.devices.autoload.autoload_builder import AutoloadDetailsBuilder
 from cloudshell.devices.driver_helper import get_api
 from cloudshell.devices.driver_helper import get_cli
 from cloudshell.devices.driver_helper import get_logger_with_thread_id
-from cloudshell.shell.core.driver_context import AutoLoadDetails
 from cloudshell.shell.core.resource_driver_interface import ResourceDriverInterface
+from cloudshell.shell.core.driver_context import AutoLoadDetails
 from cloudshell.shell.core.driver_utils import GlobalLock
 
 
-from vyos.autoload import models
 from vyos.cli.handler import VyOSCliHandler
 from vyos.configuration_attributes_structure import VyOSResource
 from vyos.runners.configuration import VyOSConfigurationRunner
+from vyos.runners.autoload import VyOSAutoloadRunner
 
 
 SHELL_TYPE = "CS_GenericDeployedApp"
@@ -53,41 +52,40 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
         :rtype: AutoLoadDetails
         """
         logger = get_logger_with_thread_id(context)
-        logger.info("Autoload")
+        logger.info("Autoload command started")
 
         with ErrorHandlingContext(logger):
             resource_config = VyOSResource.from_context(context=context,
                                                         shell_type=SHELL_TYPE,
                                                         shell_name=SHELL_NAME)
 
-            if resource_config.config_file:
-                api = get_api(context)
-                cli_handler = VyOSCliHandler(cli=self._cli,
-                                             resource_config=resource_config,
-                                             api=api,
-                                             logger=logger)
+            if not resource_config.address or resource_config.address.upper() == "NA":
+                logger.info("No IP configured, skipping Autoload")
+                return AutoLoadDetails([], [])
 
+            api = get_api(context)
+            cli_handler = VyOSCliHandler(cli=self._cli,
+                                         resource_config=resource_config,
+                                         api=api,
+                                         logger=logger)
+
+            if resource_config.config_file:
                 configuration_operations = VyOSConfigurationRunner(cli_handler=cli_handler,
                                                                    logger=logger,
                                                                    resource_config=resource_config,
                                                                    api=api)
-                logger.info('Load configuration started')
+                logger.info('Load configuration flow started')
                 configuration_operations.restore(path=path)
-                logger.info('Load configuration completed')
+                logger.info('Load configuration flow completed')
 
-            root_resource = models.GenericDeployedApp(shell_name=resource_config.shell_name,
-                                                      name="VyOS Deployed App",
-                                                      unique_id=100500)
-            port1 = models.GenericVPort(shell_name=resource_config.shell_name,
-                                        name="VyOS Port 1",
-                                        unique_id=100600)
-            port1.mac_address = "02:42:7a:e0:8f:6f"
-            port1.requested_vnic_name = "2"
+            autoload_runner = VyOSAutoloadRunner(cli_handler=cli_handler,
+                                                 logger=logger,
+                                                 resource_config=resource_config)
+            logger.info("Autoload flow started")
+            autoload_details = autoload_runner.discover()
+            logger.info("Autoload command completed")
 
-            root_resource.add_sub_resource(100600, port1)
-            logger.info("Autoload completed")
-
-            return AutoloadDetailsBuilder(root_resource).autoload_details()
+            return autoload_details
 
     def save(self, context, folder_path):
         """Save selected file to the provided destination
@@ -158,7 +156,7 @@ if __name__ == "__main__":
     from cloudshell.shell.core.driver_context import ResourceCommandContext, ResourceContextDetails, \
         ReservationContextDetails
 
-    address = '192.168.42.157'
+    address = '192.168.42.187'
 
     user = 'vyos'
     password = 'vyos'
@@ -209,13 +207,9 @@ if __name__ == "__main__":
         path = "ftp://speedtest.tele2.net/2MB.zip" # good upload/fail commit
         path = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"  # good
 
-        # dr.save(context=context,
-        #         folder_path=folder_path,
-        #         configuration_type=None,
-        #         vrf_management_name=None)
+        dr.get_inventory(context=context)
+        dr.save(context=context,
+                folder_path=folder_path)
 
         dr.restore(context=context,
-                   path=path,
-                   restore_method=None,
-                   configuration_type=None,
-                   vrf_management_name=None)
+                   path=path)
