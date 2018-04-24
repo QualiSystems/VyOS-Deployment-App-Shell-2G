@@ -75,7 +75,7 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                                                    resource_config=resource_config,
                                                                    api=api)
                 logger.info('Load configuration flow started')
-                configuration_operations.restore(path=path)
+                configuration_operations.restore(path=resource_config.config_file)
                 logger.info('Load configuration flow completed')
 
             autoload_runner = VyOSAutoloadRunner(cli_handler=cli_handler,
