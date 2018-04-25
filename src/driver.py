@@ -1,3 +1,5 @@
+import json
+
 from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.devices.driver_helper import get_api
 from cloudshell.devices.driver_helper import get_cli
@@ -12,9 +14,16 @@ from vyos.configuration_attributes_structure import VyOSResource
 from vyos.runners.configuration import VyOSConfigurationRunner
 from vyos.runners.autoload import VyOSAutoloadRunner
 
+from cloudshell.cp.vcenter.common.vcenter.vmomi_service import pyVmomiService
+from pyVim.connect import SmartConnect, Disconnect
+import pyVmomi
+
 
 SHELL_TYPE = "CS_GenericDeployedApp"
 SHELL_NAME = "Vyos"
+VCENTER_RESOURCE_USER_ATTR = "User"
+VCENTER_RESOURCE_PASSWORD_ATTR = "Password"
+
 
 
 class VyosDriver(ResourceDriverInterface, GlobalLock):
@@ -43,6 +52,17 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
         """
         pass
 
+    @staticmethod
+    def _get_resource_attribute_value(resource, attribute_name):
+        """
+
+        :param resource cloudshell.api.cloudshell_api.ResourceInfo:
+        :param str attribute_name:
+        """
+        for attribute in resource.ResourceAttributes:
+            if attribute.Name == attribute_name:
+                return attribute.Value
+
     @GlobalLock.lock
     def get_inventory(self, context):
         """Discovers the resource structure and attributes.
@@ -63,17 +83,64 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                 logger.info("No IP configured, skipping Autoload")
                 return AutoLoadDetails([], [])
 
-            api = get_api(context)
+            cs_api = get_api(context)
+
+            # get VM uuid of the Deployed App
+            deployed_vm_resource = cs_api.GetResourceDetails(resource_config.fullname)
+            vmuid = deployed_vm_resource.VmDetails.UID
+            logger.info("Deployed TVM Module App uuid: {}".format(vmuid))
+
+            # get vCenter name
+            app_request_data = json.loads(context.resource.app_context.app_request_json)
+            vcenter_name = app_request_data["deploymentService"]["cloudProviderName"]
+            logger.info("vCenter shell resource name: {}".format(vcenter_name))
+
+            vsphere = pyVmomiService(SmartConnect, Disconnect, task_waiter=None)
+
+            # get vCenter credentials
+            vcenter_resource = cs_api.GetResourceDetails(resourceFullPath=vcenter_name)
+            user = self._get_resource_attribute_value(resource=vcenter_resource,
+                                                      attribute_name=VCENTER_RESOURCE_USER_ATTR)
+
+            encrypted_password = self._get_resource_attribute_value(resource=vcenter_resource,
+                                                                    attribute_name=VCENTER_RESOURCE_PASSWORD_ATTR)
+
+            password = cs_api.DecryptPassword(encrypted_password).Value
+
+            logger.info("Connecting to the vCenter: {}".format(vcenter_name))
+            si = vsphere.connect(address=vcenter_resource.Address, user=user, password=password)
+
+            # find Deployed App VM on the vCenter
+            vm = vsphere.get_vm_by_uuid(si, vmuid)
+
+            creds = pyVmomi.vim.vm.guest.NamePasswordAuthentication(
+                username=resource_config.user,
+                password=cs_api.DecryptPassword(resource_config.password).Value)
+
+            logger.info("Enabling SSH service on the Deployed VyOS VM")
+            enable_ssh_command = ("#!/bin/vbash\n"
+                                  "source /opt/vyatta/etc/functions/script-template\n"
+                                  "configure\n"
+                                  "set service ssh port 22\n"
+                                  "commit\n"
+                                  "save\n"
+                                  "exit")
+
+            cmdspec = pyVmomi.vim.vm.guest.ProcessManager.ProgramSpec(arguments=enable_ssh_command,
+                                                                      programPath="/bin/bash")
+
+            si.content.guestOperationsManager.processManager.StartProgramInGuest(vm=vm, auth=creds, spec=cmdspec)
+
             cli_handler = VyOSCliHandler(cli=self._cli,
                                          resource_config=resource_config,
-                                         api=api,
+                                         api=cs_api,
                                          logger=logger)
 
             if resource_config.config_file:
                 configuration_operations = VyOSConfigurationRunner(cli_handler=cli_handler,
                                                                    logger=logger,
                                                                    resource_config=resource_config,
-                                                                   api=api)
+                                                                   api=cs_api)
                 logger.info('Load configuration flow started')
                 configuration_operations.restore(path=resource_config.config_file)
                 logger.info('Load configuration flow completed')
@@ -152,11 +219,11 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
 
 if __name__ == "__main__":
-    import mock, json
+    # import mock, json
     from cloudshell.shell.core.driver_context import ResourceCommandContext, ResourceContextDetails, \
         ReservationContextDetails
 
-    address = '192.168.42.187'
+    address = '192.168.42.170'
 
     user = 'vyos'
     password = 'vyos'
@@ -179,7 +246,7 @@ if __name__ == "__main__":
     context.resource.app_context = mock.MagicMock(app_request_json=json.dumps(
         {
             "deploymentService": {
-                "cloudProviderName": "vcenter_333"
+                "cloudProviderName": "vCenter"
             }
         }))
 
@@ -207,9 +274,10 @@ if __name__ == "__main__":
         path = "ftp://speedtest.tele2.net/2MB.zip" # good upload/fail commit
         path = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"  # good
 
-        dr.get_inventory(context=context)
-        dr.save(context=context,
-                folder_path=folder_path)
+        print dr.get_inventory(context=context)
+        # dr.save(context=context,
+        #         folder_path=folder_path)
+        #
+        # dr.restore(context=context,
+        #            path=path)
 
-        dr.restore(context=context,
-                   path=path)
