@@ -36,6 +36,19 @@ class VyOSResource(object):
         return self.attributes.get("{}Configuration File".format(self.namespace_prefix), None)
 
     @property
+    def enable_ssh(self):
+        """
+
+        :rtype: str
+        """
+        enable_ssh = self.attributes.get("{}Enable SSH".format(self.namespace_prefix), "")
+
+        if enable_ssh.lower() == "true":
+            return True
+
+        return False
+
+    @property
     def backup_user(self):
         """
 

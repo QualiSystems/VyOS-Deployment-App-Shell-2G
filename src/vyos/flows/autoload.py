@@ -39,8 +39,9 @@ class VyOSAutoloadFlow(object):
                                         re.DOTALL).groups()[0].split("\n")
 
             for interface_data in interfaces_data:
-                interface_name = re.search(r"(?P<interface_name>.*?)[ ]{2,}.*", interface_data)
-                if interface_name:
+                interface_name_match = re.search(r"(?P<interface_name>[a-zA-Z0-9.]+?)[ ]{2,}.*", interface_data)
+                if interface_name_match:
+                    interface_name = interface_name_match.group("interface_name")
                     unique_id = hash(interface_name)
                     port = models.GenericVPort(shell_name=self._resource_config.shell_name,
                                                name=interface_name,

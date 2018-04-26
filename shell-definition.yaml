@@ -21,6 +21,10 @@ node_types:
         type: string          # optional values: string, integer, float, boolean, cloudshell.datatypes.Password
         description: Path to the configuration file, including the configuration file name. Path should include the protocol type (for example 'tftp://10.10.10.10/asdf')
         tags: [configuration]
+      Enable SSH:
+        type: boolean
+        default: true
+        tags: [configuration]
     capabilities:
       auto_discovery_capability:
         type: cloudshell.capabilities.AutoDiscovery

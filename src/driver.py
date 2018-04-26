@@ -63,6 +63,61 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
             if attribute.Name == attribute_name:
                 return attribute.Value
 
+    def _enable_ssh_on_vm(self, context, resource_config, cs_api, logger):
+        """
+
+        :param context:
+        :param resource_config:
+        :param cs_api:
+        :param logger:
+        :return:
+        """
+        # get VM uuid of the Deployed App
+        deployed_vm_resource = cs_api.GetResourceDetails(resource_config.fullname)
+        vmuid = deployed_vm_resource.VmDetails.UID
+        logger.info("Deployed TVM Module App uuid: {}".format(vmuid))
+
+        # get vCenter name
+        app_request_data = json.loads(context.resource.app_context.app_request_json)
+        vcenter_name = app_request_data["deploymentService"]["cloudProviderName"]
+        logger.info("vCenter shell resource name: {}".format(vcenter_name))
+
+        vsphere = pyVmomiService(SmartConnect, Disconnect, task_waiter=None)
+
+        # get vCenter credentials
+        vcenter_resource = cs_api.GetResourceDetails(resourceFullPath=vcenter_name)
+        user = self._get_resource_attribute_value(resource=vcenter_resource,
+                                                  attribute_name=VCENTER_RESOURCE_USER_ATTR)
+
+        encrypted_password = self._get_resource_attribute_value(resource=vcenter_resource,
+                                                                attribute_name=VCENTER_RESOURCE_PASSWORD_ATTR)
+
+        password = cs_api.DecryptPassword(encrypted_password).Value
+
+        logger.info("Connecting to the vCenter: {}".format(vcenter_name))
+        si = vsphere.connect(address=vcenter_resource.Address, user=user, password=password)
+
+        # find Deployed App VM on the vCenter
+        vm = vsphere.get_vm_by_uuid(si, vmuid)
+
+        creds = pyVmomi.vim.vm.guest.NamePasswordAuthentication(
+            username=resource_config.user,
+            password=cs_api.DecryptPassword(resource_config.password).Value)
+
+        logger.info("Enabling SSH service on the Deployed VyOS VM")
+        enable_ssh_command = ("#!/bin/vbash\n"
+                              "source /opt/vyatta/etc/functions/script-template\n"
+                              "configure\n"
+                              "set service ssh port 22\n"
+                              "commit\n"
+                              "save\n"
+                              "exit")
+
+        cmdspec = pyVmomi.vim.vm.guest.ProcessManager.ProgramSpec(arguments=enable_ssh_command,
+                                                                  programPath="/bin/bash")
+
+        si.content.guestOperationsManager.processManager.StartProgramInGuest(vm=vm, auth=creds, spec=cmdspec)
+
     @GlobalLock.lock
     def get_inventory(self, context):
         """Discovers the resource structure and attributes.
@@ -85,51 +140,11 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
             cs_api = get_api(context)
 
-            # get VM uuid of the Deployed App
-            deployed_vm_resource = cs_api.GetResourceDetails(resource_config.fullname)
-            vmuid = deployed_vm_resource.VmDetails.UID
-            logger.info("Deployed TVM Module App uuid: {}".format(vmuid))
-
-            # get vCenter name
-            app_request_data = json.loads(context.resource.app_context.app_request_json)
-            vcenter_name = app_request_data["deploymentService"]["cloudProviderName"]
-            logger.info("vCenter shell resource name: {}".format(vcenter_name))
-
-            vsphere = pyVmomiService(SmartConnect, Disconnect, task_waiter=None)
-
-            # get vCenter credentials
-            vcenter_resource = cs_api.GetResourceDetails(resourceFullPath=vcenter_name)
-            user = self._get_resource_attribute_value(resource=vcenter_resource,
-                                                      attribute_name=VCENTER_RESOURCE_USER_ATTR)
-
-            encrypted_password = self._get_resource_attribute_value(resource=vcenter_resource,
-                                                                    attribute_name=VCENTER_RESOURCE_PASSWORD_ATTR)
-
-            password = cs_api.DecryptPassword(encrypted_password).Value
-
-            logger.info("Connecting to the vCenter: {}".format(vcenter_name))
-            si = vsphere.connect(address=vcenter_resource.Address, user=user, password=password)
-
-            # find Deployed App VM on the vCenter
-            vm = vsphere.get_vm_by_uuid(si, vmuid)
-
-            creds = pyVmomi.vim.vm.guest.NamePasswordAuthentication(
-                username=resource_config.user,
-                password=cs_api.DecryptPassword(resource_config.password).Value)
-
-            logger.info("Enabling SSH service on the Deployed VyOS VM")
-            enable_ssh_command = ("#!/bin/vbash\n"
-                                  "source /opt/vyatta/etc/functions/script-template\n"
-                                  "configure\n"
-                                  "set service ssh port 22\n"
-                                  "commit\n"
-                                  "save\n"
-                                  "exit")
-
-            cmdspec = pyVmomi.vim.vm.guest.ProcessManager.ProgramSpec(arguments=enable_ssh_command,
-                                                                      programPath="/bin/bash")
-
-            si.content.guestOperationsManager.processManager.StartProgramInGuest(vm=vm, auth=creds, spec=cmdspec)
+            if resource_config.enable_ssh:
+                self._enable_ssh_on_vm(context=context,
+                                       resource_config=resource_config,
+                                       cs_api=cs_api,
+                                       logger=logger)
 
             cli_handler = VyOSCliHandler(cli=self._cli,
                                          resource_config=resource_config,
@@ -151,6 +166,7 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
             logger.info("Autoload flow started")
             autoload_details = autoload_runner.discover()
             logger.info("Autoload command completed")
+            logger.info("Autoload details {}".format(autoload_details))
 
             return autoload_details
 
@@ -219,11 +235,12 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
 
 if __name__ == "__main__":
-    # import mock, json
+    import mock
     from cloudshell.shell.core.driver_context import ResourceCommandContext, ResourceContextDetails, \
         ReservationContextDetails
 
-    address = '192.168.42.170'
+    # address = '192.168.42.231'
+    address = "192.168.41.85"
 
     user = 'vyos'
     password = 'vyos'
@@ -241,7 +258,7 @@ if __name__ == "__main__":
     context.resource.attributes = {}
     context.resource.attributes['{}.User'.format(SHELL_NAME)] = user
     context.resource.attributes['{}.Password'.format(SHELL_NAME)] = password
-    context.resource.attributes['{}.Configuration File'.format(SHELL_NAME)] = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"
+    context.resource.attributes['{}.Configuration File'.format(SHELL_NAME)] = "ftp://ftp.uconn.edu/48_hour/tvm_m_2_fec7-7c42-running-260418-163606"
     context.resource.address = address
     context.resource.app_context = mock.MagicMock(app_request_json=json.dumps(
         {
@@ -268,16 +285,18 @@ if __name__ == "__main__":
         folder_path = "scp://vyos:vyos@192.168.42.157/copied_file_11.boot"  # fail
         folder_path = "ftp://speedtest.tele2.net/vyos-test.config.boot"  # fail
         folder_path = "ftp://speedtest.tele2.net/upload"  # good
+        folder_path = "ftp://ftp.uconn.edu/48_hour/"  # good
 
         path = "ftp://speedtest.tele2.net/vyos-test.config.boot"  # fail
         path = "scp://vyos:vyos@192.168.42.157/copied_file_11.boot"  # fail
         path = "ftp://speedtest.tele2.net/2MB.zip" # good upload/fail commit
         path = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"  # good
+        path = "ftp://ftp.uconn.edu/48_hour/tvm_m_2_fec7-7c42-running-260418-163606"
 
         print dr.get_inventory(context=context)
         # dr.save(context=context,
         #         folder_path=folder_path)
-        #
+
         # dr.restore(context=context,
         #            path=path)
 
