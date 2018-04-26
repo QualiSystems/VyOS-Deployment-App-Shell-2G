@@ -49,22 +49,6 @@ class VyOSResource(object):
         return False
 
     @property
-    def backup_user(self):
-        """
-
-        :rtype: str
-        """
-        return ""
-
-    @property
-    def backup_password(self):
-        """
-
-        :rtype: str
-        """
-        return ""
-
-    @property
     def user(self):
         """
 

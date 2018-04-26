@@ -16,3 +16,11 @@ class VyOSConfigurationRunner(ConfigurationRunner):
     @property
     def file_system(self):
         return ""
+
+    def get_path(self, path=''):
+        """
+
+        :param path: path to remote file storage
+        :return: valid path or :raise Exception:
+        """
+        return path
