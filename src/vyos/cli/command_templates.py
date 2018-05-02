@@ -30,6 +30,6 @@ LOAD_CONFIGURATION = CommandTemplate("load {source_file_path}", error_map=prepar
                                                          "Please check that config file link is correct")))))
 
 COMMIT = CommandTemplate("commit", error_map=prepare_error_map(
-    error_map=OrderedDict(("[Cc]ommit failed", "Failed to commit changes. Please check your configuration file"))))
+    error_map=OrderedDict((("[Cc]ommit failed", "Failed to commit changes. Please check your configuration file"),))))
 
 SHOW_INTERFACES = CommandTemplate("show interfaces", error_map=prepare_error_map())
