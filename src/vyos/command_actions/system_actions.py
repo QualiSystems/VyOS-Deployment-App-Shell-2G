@@ -81,16 +81,12 @@ class SystemActions(object):
         :param timeout: session timeout
         :raise Exception:
         """
-        output = CommandTemplateExecutor(self._cli_service,
-                                         command_templates.LOAD_CONFIGURATION,
-                                         action_map=action_map,
-                                         error_map=error_map,
-                                         timeout=timeout,
-                                         check_action_loop_detector=False).execute_command(source_file_path=path)
-
-        if re.search(r'[Ee]rror.*', output, flags=re.DOTALL):
-            self._logger.error(output)
-            raise Exception("Copy command failed. See logs for the details")
+        CommandTemplateExecutor(self._cli_service,
+                                command_templates.LOAD_CONFIGURATION,
+                                action_map=action_map,
+                                error_map=error_map,
+                                timeout=timeout,
+                                check_action_loop_detector=False).execute_command(source_file_path=path)
 
     def commit(self):
         """

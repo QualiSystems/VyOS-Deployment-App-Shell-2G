@@ -22,3 +22,4 @@ class VyOSRestoreFlow(RestoreConfigurationFlow):
             sys_actions.load(path=path,
                              action_map=load_action_map)
             sys_actions.commit()
+            sys_actions.save(destination="")

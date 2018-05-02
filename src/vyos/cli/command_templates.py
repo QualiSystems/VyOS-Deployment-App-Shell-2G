@@ -19,9 +19,12 @@ def prepare_error_map(error_map=None):
     return error_map
 
 
-SAVE_CONFIGURATION = CommandTemplate("save {destination_file_path}", error_map=prepare_error_map())
+SAVE_CONFIGURATION = CommandTemplate("save {destination_file_path}", error_map=prepare_error_map(
+    error_map=OrderedDict((("[Ee]rror saving", "Failed to save configuration file"),))))
 
-LOAD_CONFIGURATION = CommandTemplate("load {source_file_path}", error_map=prepare_error_map())
+LOAD_CONFIGURATION = CommandTemplate("load {source_file_path}", error_map=prepare_error_map(
+    error_map=OrderedDict((("[Cc]an not open", "Unable to open remote configuration file. "
+                                               "Please check that config file link is correct"),))))
 
 COMMIT = CommandTemplate("commit", error_map=prepare_error_map())
 
