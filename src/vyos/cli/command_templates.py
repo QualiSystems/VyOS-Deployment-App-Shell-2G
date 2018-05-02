@@ -24,8 +24,12 @@ SAVE_CONFIGURATION = CommandTemplate("save {destination_file_path}", error_map=p
 
 LOAD_CONFIGURATION = CommandTemplate("load {source_file_path}", error_map=prepare_error_map(
     error_map=OrderedDict((("[Cc]an not open", "Unable to open remote configuration file. "
-                                               "Please check that config file link is correct"),))))
+                                               "Please check that config file link is correct"),
+                           ("[Ii]nvalid url protocol", "Invalid protocol type in the configuration file link"),
+                           ("[Hh][Tt][Tt][Pp] [Ee]rror", "Unable to retrieve configuration file via HTTP. "
+                                                         "Please check that config file link is correct")))))
 
-COMMIT = CommandTemplate("commit", error_map=prepare_error_map())
+COMMIT = CommandTemplate("commit", error_map=prepare_error_map(
+    error_map=OrderedDict(("[Cc]ommit failed", "Failed to commit changes. Please check your configuration file"))))
 
 SHOW_INTERFACES = CommandTemplate("show interfaces", error_map=prepare_error_map())

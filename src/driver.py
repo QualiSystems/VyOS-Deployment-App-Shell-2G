@@ -286,17 +286,18 @@ if __name__ == "__main__":
         folder_path = "ftp://speedtest.tele2.net/vyos-test.config.boot"  # fail
         folder_path = "ftp://speedtest.tele2.net/upload"  # good
         folder_path = "ftp://ftp.uconn.edu/48_hour/"  # good
+        folder_path = "ftp://ftp.uconn.edu/"
 
         path = "ftp://speedtest.tele2.net/vyos-test.config.boot"  # fail
         path = "scp://vyos:vyos@192.168.42.157/copied_file_11.boot"  # fail
         path = "ftp://speedtest.tele2.net/2MB.zip" # good upload/fail commit
         path = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"  # good
-        path = "ftp://ftp.uconn.edu/48_hour/tvm_m_2_fec7-7c42-running-260418-163606"
+        path = "http://192.168.41.65/vyosconfig.txt"
 
-        print dr.get_inventory(context=context)
+        # print dr.get_inventory(context=context)
         # dr.save(context=context,
         #         folder_path=folder_path)
 
-        # dr.restore(context=context,
-        #            path=path)
-
+        dr.restore(context=context,
+                   path=path)
+#
