@@ -1,5 +1,10 @@
+from datetime import datetime
+from datetime import timedelta
+from functools import wraps
 import json
+import time
 
+from cloudshell.cli.session_manager_impl import SessionManagerException
 from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.devices.driver_helper import get_api
 from cloudshell.devices.driver_helper import get_cli
@@ -23,7 +28,30 @@ SHELL_TYPE = "CS_GenericDeployedApp"
 SHELL_NAME = "Vyos"
 VCENTER_RESOURCE_USER_ATTR = "User"
 VCENTER_RESOURCE_PASSWORD_ATTR = "Password"
+SSH_WAITING_TIMEOUT = 20 * 60
+SSH_WAITING_INTERVAL = 5 * 60
 
+
+def unstable_ssh(f, timeout=SSH_WAITING_TIMEOUT, interval=SSH_WAITING_INTERVAL):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        timeout_time = datetime.now() + timedelta(seconds=timeout)
+        logger = kwargs["logger"]
+
+        while True:
+            logger.info("Trying to execute operation with CLI command(s)...")
+
+            try:
+                return f(*args, **kwargs)
+            except SessionManagerException:
+                logger.exception("Unable to get CLI session")
+
+                if datetime.now() > timeout_time:
+                    raise Exception("Unable to get CLI session within {} minute(s)"
+                                    .format(timeout / 60))
+            time.sleep(interval)
+
+    return wrapper
 
 
 class VyosDriver(ResourceDriverInterface, GlobalLock):
@@ -118,6 +146,43 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
         si.content.guestOperationsManager.processManager.StartProgramInGuest(vm=vm, auth=creds, spec=cmdspec)
 
+    @unstable_ssh
+    def _execute_load_config_flow(self, resource_config, cli_handler, cs_api, logger):
+        """
+
+        :param resource_config:
+        :param cli_handler:
+        :param cs_api:
+        :param logger:
+        :return:
+        """
+        configuration_operations = VyOSConfigurationRunner(cli_handler=cli_handler,
+                                                           logger=logger,
+                                                           resource_config=resource_config,
+                                                           api=cs_api)
+        logger.info('Load configuration flow started')
+        configuration_operations.restore(path=resource_config.config_file)
+        logger.info('Load configuration flow completed')
+
+    @unstable_ssh
+    def _execute_autoload_flow(self, resource_config, cli_handler, logger):
+        """
+
+        :param resource_config:
+        :param cli_handler:
+        :param logger:
+        :return:
+        """
+        autoload_runner = VyOSAutoloadRunner(cli_handler=cli_handler,
+                                             logger=logger,
+                                             resource_config=resource_config)
+        logger.info("Autoload flow started")
+        autoload_details = autoload_runner.discover()
+        logger.info("Autoload command completed")
+        logger.info("Autoload details {}".format(autoload_details))
+
+        return autoload_details
+
     @GlobalLock.lock
     def get_inventory(self, context):
         """Discovers the resource structure and attributes.
@@ -152,23 +217,14 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                                          logger=logger)
 
             if resource_config.config_file:
-                configuration_operations = VyOSConfigurationRunner(cli_handler=cli_handler,
-                                                                   logger=logger,
-                                                                   resource_config=resource_config,
-                                                                   api=cs_api)
-                logger.info('Load configuration flow started')
-                configuration_operations.restore(path=resource_config.config_file)
-                logger.info('Load configuration flow completed')
+                self._execute_load_config_flow(resource_config=resource_config,
+                                               cli_handler=cli_handler,
+                                               cs_api=cs_api,
+                                               logger=logger)
 
-            autoload_runner = VyOSAutoloadRunner(cli_handler=cli_handler,
-                                                 logger=logger,
-                                                 resource_config=resource_config)
-            logger.info("Autoload flow started")
-            autoload_details = autoload_runner.discover()
-            logger.info("Autoload command completed")
-            logger.info("Autoload details {}".format(autoload_details))
-
-            return autoload_details
+            return self._execute_autoload_flow(resource_config=resource_config,
+                                               cli_handler=cli_handler,
+                                               logger=logger)
 
     def save(self, context, folder_path):
         """Save selected file to the provided destination
@@ -294,10 +350,10 @@ if __name__ == "__main__":
         path = "scp://root:Password1@192.168.42.252/root/copied_file_11.boot"  # good
         path = "http://192.168.41.65/vyosconfig.txt"
 
-        # print dr.get_inventory(context=context)
+        print dr.get_inventory(context=context)
         # dr.save(context=context,
         #         folder_path=folder_path)
 
-        dr.restore(context=context,
-                   path=path)
+        # dr.restore(context=context,
+        #            path=path)
 #
