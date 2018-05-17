@@ -10,7 +10,7 @@ description: >
   TOSCA based deployed app shell
 
 imports:
-  - cloudshell_standard: cloudshell_deployed_app_standard_1_0_2.yaml
+  - cloudshell_standard: cloudshell_deployed_app_standard_1_0_3.yaml
 
 node_types:
 
