@@ -4,3 +4,4 @@ cloudshell-shell-core>=4.0,<4.1
 cloudshell-networking-devices>=2.5,<2.6
 cloudshell-cp-vcenter>=1.10,<1.11
 pyvmomi==6.5
+requests==2.18.4
