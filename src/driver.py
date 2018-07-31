@@ -131,16 +131,6 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
                 logger.info("No IP configured, skipping Autoload")
                 return AutoLoadDetails([], [])
 
-            # vm_configure_operation = PostBootVMConfigureOperation(cs_api=cs_api,
-            #                                                       resource_config=resource_config,
-            #                                                       vcenter_name=vcneter_name,
-            #                                                       logger=logger)
-
-            # todo: check if it will be OK with Address == "NA" check
-            # if vm_configure_operation.is_vm_powered_on:
-            #     logger.info("Skipping Autoload. VM is not yet in the 'Powered on' state")
-            #     return AutoLoadDetails([], [])
-
             cli_handler = VyOSCliHandler(cli=self._cli,
                                          resource_config=resource_config,
                                          api=cs_api,
