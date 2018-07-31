@@ -1,3 +1,5 @@
+from datetime import datetime
+from datetime import timedelta
 import time
 
 from cloudshell.cp.vcenter.common.vcenter.vmomi_service import pyVmomiService
@@ -8,9 +10,13 @@ import requests
 
 
 VYOS_CLEAR_VNIC_ID_SCRIPT_PATH = "/config/scripts/clear-nic-hw-id.pl"
+PERL_PROGRAM_PATH = "/usr/bin/perl"
+
 VCENTER_RESOURCE_USER_ATTR = "User"
 VCENTER_RESOURCE_PASSWORD_ATTR = "Password"
-PERL_PROGRAM_PATH = "/usr/bin/perl"
+
+VM_TOOLS_WAITING_TIMEOUT = 20 * 60
+VM_TOOLS_WAITING_INTERVAL = 10
 
 
 class PostBootVMConfigureOperation(object):
@@ -92,7 +98,6 @@ class PostBootVMConfigureOperation(object):
                                                                    attribute_name=VCENTER_RESOURCE_PASSWORD_ATTR)
 
         password = cs_api.DecryptPassword(encrypted_password).Value
-        # password = "!QAZ2wsx"
 
         return vcenter_service.connect(address=vcenter_resource.Address, user=user, password=password)
 
@@ -104,7 +109,6 @@ class PostBootVMConfigureOperation(object):
         :rtype: pyVmomi.vim.vm.guest.NamePasswordAuthentication
         """
         password = cs_api.DecryptPassword(resource_config.password).Value
-        # password = "vyos"
 
         return pyVmomi.vim.vm.guest.NamePasswordAuthentication(
             username=resource_config.user,
@@ -152,23 +156,34 @@ class PostBootVMConfigureOperation(object):
 
         return vm_power_state == pyVmomi.vim.VirtualMachine.PowerState.poweredOn
 
-    def wait_for_vm(self):
+    def wait_for_vm(self, timeout=VM_TOOLS_WAITING_TIMEOUT, interval=VM_TOOLS_WAITING_INTERVAL):
         """
 
+        :param int timeout:
+        :param int interval:
         :return:
         """
         self._logger.info("Waiting for Virtual Machine Tools to be ready")
+        timeout_time = datetime.now() + timedelta(seconds=timeout)
 
-        # todo: add timeout !!!
         while self._vm.summary.runtime.powerState != pyVmomi.vim.VirtualMachine.PowerState.poweredOn \
-                and self._vm.guest.toolsStatus not in [pyVmomi.vim.VirtualMachineToolsStatus.toolsOk,
-                                                       pyVmomi.vim.VirtualMachineToolsStatus.toolsOld]:
+                or self._vm.guest.toolsStatus not in [pyVmomi.vim.VirtualMachineToolsStatus.toolsOk,
+                                                      pyVmomi.vim.VirtualMachineToolsStatus.toolsOld]:
 
             self._logger.info("Waiting for Virtual Machine Tools. Current VM status is : {}. Tools status is {}"
                               .format(self._vm.summary.runtime.powerState, self._vm.guest.toolsStatus))
-            time.sleep(10)
 
-        self._logger.info("Virtual Machine Tools are ready")
+            if datetime.now() > timeout_time:
+                raise Exception("VM aren't ready within {} minute(s). Power state: {}. Tools status: {}"
+                                .format(timeout / 60,
+                                        self._vm.summary.runtime.powerState,
+                                        self._vm.guest.toolsStatus))
+
+            time.sleep(interval)
+
+        self._logger.info("Virtual Machine Tools are ready. Power state: {}. Tools status: {}".format(
+            self._vm.summary.runtime.powerState,
+            self._vm.guest.toolsStatus))
 
     def _upload_custom_script(self, local_script_path, remote_script_path):
         """
