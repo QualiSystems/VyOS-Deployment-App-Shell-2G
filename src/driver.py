@@ -2,6 +2,7 @@ from datetime import datetime
 from datetime import timedelta
 from functools import wraps
 import json
+import os
 import time
 
 from cloudshell.cli.session_manager_impl import SessionManagerException
@@ -22,8 +23,11 @@ from vyos.runners.autoload import VyOSAutoloadRunner
 
 SHELL_TYPE = "CS_GenericDeployedApp"
 SHELL_NAME = "Vyos"
+
 SSH_WAITING_TIMEOUT = 20 * 60
 SSH_WAITING_INTERVAL = 5 * 60
+
+CLEAR_NIC_HW_ID_SCRIPT_PATH = "vyos/vm_scripts/clear-nic-hw-id.pl"
 
 
 def unstable_ssh(f, timeout=SSH_WAITING_TIMEOUT, interval=SSH_WAITING_INTERVAL):
@@ -37,7 +41,7 @@ def unstable_ssh(f, timeout=SSH_WAITING_TIMEOUT, interval=SSH_WAITING_INTERVAL):
 
             try:
                 return f(*args, **kwargs)
-            except SessionManagerException:
+            except SessionManagerException:  # note: it may catch CLI errors, unrelated to the connectivity
                 logger.exception("Unable to get CLI session")
 
                 if datetime.now() > timeout_time:
@@ -171,9 +175,8 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
 
             vm_configure_operation.wait_for_vm()
 
-            import os  # todo: rework it with constants somehow
             dirname = os.path.dirname(__file__)
-            filename = os.path.join(dirname, "vyos", "clear-nic-hw-id.pl")
+            filename = os.path.join(dirname, CLEAR_NIC_HW_ID_SCRIPT_PATH)
 
             vm_configure_operation.apply_clear_nic_hw_id_script(script_path=filename)
             vm_configure_operation.reboot_vm()
