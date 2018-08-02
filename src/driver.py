@@ -42,7 +42,7 @@ def unstable_ssh(f, timeout=SSH_WAITING_TIMEOUT, interval=SSH_WAITING_INTERVAL):
             try:
                 return f(*args, **kwargs)
             except SessionManagerException:  # note: it may catch CLI errors, unrelated to the connectivity
-                logger.exception("Unable to get CLI session")
+                logger.info("Unable to get CLI session", exc_info=True)
 
                 if datetime.now() > timeout_time:
                     raise Exception("Unable to get CLI session within {} minute(s)"
@@ -263,10 +263,10 @@ if __name__ == "__main__":
 
     context = ResourceCommandContext(*(None,)*4)
     context.resource = ResourceContextDetails(*(None,)*13)
-    context.resource.name = 'vcenter_fresh_8cb1-4fcf'
-    context.resource.fullname = 'vcenter_fresh_8cb1-4fcf'
+    context.resource.name = 'vcenter_fresh_9ffc-e5ba'
+    context.resource.fullname = 'vcenter_fresh_9ffc-e5ba'
     context.reservation = ReservationContextDetails(*(None,)*7)
-    context.reservation.reservation_id = 'fb789016-72c8-4e26-9181-b2e82f8c4fcf'
+    context.reservation.reservation_id = 'c6ba183e-b70d-447d-95f5-4a07521ee5ba'
     context.resource.attributes = {}
     context.resource.attributes['{}.Enable SSH'.format(SHELL_NAME)] = "False"
     context.resource.attributes['{}.User'.format(SHELL_NAME)] = user

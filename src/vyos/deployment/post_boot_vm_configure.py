@@ -1,5 +1,6 @@
 from datetime import datetime
 from datetime import timedelta
+from functools import wraps
 import time
 
 from cloudshell.cp.vcenter.common.vcenter.vmomi_service import pyVmomiService
@@ -17,6 +18,29 @@ VCENTER_RESOURCE_PASSWORD_ATTR = "Password"
 
 VM_TOOLS_WAITING_TIMEOUT = 20 * 60
 VM_TOOLS_WAITING_INTERVAL = 10
+
+GUEST_OPERATIONS_WAITING_TIMEOUT = 20 * 60
+GUEST_OPERATIONS_WAITING_INTERVAL = 20
+
+
+def wait_for_guest_operations(f, timeout=GUEST_OPERATIONS_WAITING_TIMEOUT, interval=GUEST_OPERATIONS_WAITING_INTERVAL):
+    @wraps(f)
+    def wrapper(self, *args, **kwargs):
+        timeout_time = datetime.now() + timedelta(seconds=timeout)
+
+        while True:
+            try:
+                return f(self, *args, **kwargs)
+            except pyVmomi.vim.fault.GuestOperationsUnavailable:
+                self._logger.info("Unable to perform operation due to GuestOperationsUnavailable Exception",
+                                  exc_info=True)
+
+                if datetime.now() > timeout_time:
+                    raise Exception("Unable to perform operation due to GuestOperationsUnavailable Exception "
+                                    "within {} minute(s)".format(timeout / 60))
+            time.sleep(interval)
+
+    return wrapper
 
 
 class PostBootVMConfigureOperation(object):
@@ -114,6 +138,7 @@ class PostBootVMConfigureOperation(object):
             username=resource_config.user,
             password=password)
 
+    @wait_for_guest_operations
     def enable_ssh(self):
         """
 
@@ -168,7 +193,8 @@ class PostBootVMConfigureOperation(object):
 
         while self._vm.summary.runtime.powerState != pyVmomi.vim.VirtualMachine.PowerState.poweredOn \
                 or self._vm.guest.toolsStatus not in [pyVmomi.vim.VirtualMachineToolsStatus.toolsOk,
-                                                      pyVmomi.vim.VirtualMachineToolsStatus.toolsOld]:
+                                                      pyVmomi.vim.VirtualMachineToolsStatus.toolsOld]\
+                or self._vm.guest.guestId is None:
 
             self._logger.info("Waiting for Virtual Machine Tools. Current VM status is : {}. Tools status is {}"
                               .format(self._vm.summary.runtime.powerState, self._vm.guest.toolsStatus))
@@ -185,6 +211,7 @@ class PostBootVMConfigureOperation(object):
             self._vm.summary.runtime.powerState,
             self._vm.guest.toolsStatus))
 
+    @wait_for_guest_operations
     def _upload_custom_script(self, local_script_path, remote_script_path):
         """
 
@@ -222,6 +249,7 @@ class PostBootVMConfigureOperation(object):
 
         self._logger.info("Script '{}' was uploaded as '{}'".format(local_script_path, remote_script_path))
 
+    @wait_for_guest_operations
     def _execute_custom_script(self, remote_script_path, program_path):
         """
 
