@@ -10,9 +10,11 @@ from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.devices.driver_helper import get_api
 from cloudshell.devices.driver_helper import get_cli
 from cloudshell.devices.driver_helper import get_logger_with_thread_id
+from cloudshell.devices.driver_helper import parse_custom_commands
 from cloudshell.shell.core.resource_driver_interface import ResourceDriverInterface
 from cloudshell.shell.core.driver_context import AutoLoadDetails
 from cloudshell.shell.core.driver_utils import GlobalLock
+from cloudshell.devices.runners.run_command_runner import RunCommandRunner as CommandRunner
 
 from vyos.cli.handler import VyOSCliHandler
 from vyos.configuration_attributes_structure import VyOSResource
@@ -184,6 +186,60 @@ class VyosDriver(ResourceDriverInterface, GlobalLock):
             if resource_config.enable_ssh:
                 vm_configure_operation.enable_ssh()
 
+    @unstable_ssh
+    def run_custom_command(self, context, custom_command):
+        """Send custom command
+
+        :param ResourceCommandContext context: ResourceCommandContext object with all Resource Attributes inside
+        :return: result
+        :rtype: str
+        """
+
+        logger = get_logger_with_thread_id(context)
+
+        with ErrorHandlingContext(logger):
+            api = get_api(context)
+            resource_config = VyOSResource.from_context(context=context,
+                                                        shell_type=SHELL_TYPE,
+                                                        shell_name=SHELL_NAME)
+
+            cli_handler = VyOSCliHandler(cli=self._cli,
+                                         resource_config=resource_config,
+                                         api=cs_api,
+                                         logger=logger)
+            send_command_operations = CommandRunner(logger=logger, cli_handler=cli_handler)
+
+            response = send_command_operations.run_custom_command(custom_command=parse_custom_commands(custom_command))
+
+            return response
+        
+    @unstable_ssh
+    def run_custom_config_command(self, context, custom_command):
+        """Send custom command in configuration mode
+
+        :param ResourceCommandContext context: ResourceCommandContext object with all Resource Attributes inside
+        :return: result
+        :rtype: str
+        """
+
+        logger = get_logger_with_thread_id(context)
+        with ErrorHandlingContext(logger):
+            api = get_api(context)
+            resource_config = VyOSResource.from_context(context=context,
+                                                        shell_type=SHELL_TYPE,
+                                                        shell_name=SHELL_NAME)
+
+            cli_handler = VyOSCliHandler(cli=self._cli,
+                                         resource_config=resource_config,
+                                         api=cs_api,
+                                         logger=logger)
+            send_command_operations = CommandRunner(logger=logger, cli_handler=cli_handler)
+
+            response = send_command_operations.run_custom_config_command(
+                custom_command=parse_custom_commands(custom_command))
+
+            return response
+    
     def save(self, context, folder_path):
         """Save selected file to the provided destination
 
